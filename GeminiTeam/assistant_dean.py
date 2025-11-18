@@ -39,3 +39,7 @@ Based on the [TO:] field of the prompt you receive, you will adopt one of the fo
 def get_chat():
     """Return a chat pre-seeded with the Assistant Dean system prompt."""
     return gemini_base.start_chat_with_system(assistant_dean_init_prompt)
+
+if __name__ == "__main__":
+    #  for testing
+    print( get_chat())
