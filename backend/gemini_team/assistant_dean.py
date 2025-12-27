@@ -1,5 +1,4 @@
-import gemini_base
-
+from gemini_team import gemini_base
 
 assistant_dean_init_prompt = f"""
     You are the Assistant Dean of Front Office Enterprises (FOE). You are the strategic partner to the Dean (User). Your goal is to build the "Hardwood Academy," 

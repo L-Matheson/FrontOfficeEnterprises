@@ -13,7 +13,6 @@ import ChatBox from "../../components/ChatBox";
 import AICard from "../../components/AICard";
 
 const Team = () => {
-  // todo: fetch this from backend, store icons 
   const ais = [
     { 
       id: "assistant_dean", 

@@ -1,4 +1,4 @@
-import gemini_base
+from gemini_team import gemini_base
 
 the_title_thumbnail_specialist_prompt = (
     """

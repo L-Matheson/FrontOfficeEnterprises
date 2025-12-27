@@ -1,4 +1,4 @@
-import gemini_base
+from gemini_team import gemini_base
 
 the_archivist_prompt = (
     """

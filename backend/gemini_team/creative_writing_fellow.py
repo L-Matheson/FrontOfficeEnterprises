@@ -1,4 +1,4 @@
-import gemini_base
+from gemini_team import gemini_base
 
 creative_writing_fellow_prompt = (
    """
