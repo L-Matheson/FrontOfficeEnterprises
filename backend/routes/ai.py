@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from gemini_team import assistant_dean, auditor, creative_writing_fellow, researcher, visual_technician, social_media_intern, music_supervisor, title_thumbnail_specialist, gemini_base
+from utils.message_handler import MessageHandler
 
 # Create the AI blueprint
 ai_bp = Blueprint('ai', __name__, url_prefix='/api')
@@ -27,11 +28,11 @@ def get_or_create_chat(ai_id):
             # Use the specific AI module's get_chat function
             chat_sessions[ai_id] = AI_MODULES[ai_id].get_chat()
         else:
-            # Fallback to assistant dean if AI not found
-            chat_sessions[ai_id] = assistant_dean.get_chat()
+            raise ValueError(f"AI module '{ai_id}' not found")
     return chat_sessions[ai_id]
 
-
+    
+            
 @ai_bp.route('/chat', methods=['POST'])
 def chat():
     """Handle chat messages from the frontend."""
@@ -43,16 +44,50 @@ def chat():
         if not message:
             return jsonify({'error': 'Message is required'}), 400
         
-        # Get or create chat session for this AI
         chat_session = get_or_create_chat(ai_id)
         
+        # Check if this is the first user message to the dean BEFORE sending to model.
+        # With system_instruction-based chats, history should be empty before the first user message.
+        is_first_message = ai_id == "assistant_dean" and len(chat_session.history) == 0
+        print('chat history: ', chat_session.history)
         # Send message and get response
         response_text = gemini_base.ask_model(message, chat_session)
-        
+
+        # For Assistant Dean, always attempt to extract modules + MOS instructions.
+        if ai_id == "assistant_dean":
+            modules = MessageHandler.extract_modules(response_text)
+            mos_plan = MessageHandler.extract_mos_execution_plan(response_text)
+            assignments = MessageHandler.extract_assignments(response_text)
+            non_syllabus_text = MessageHandler.extract_non_syllabus_text(response_text)
+
+            if isinstance(modules, list) and len(modules) > 0:
+                return jsonify({
+                    'response': modules,
+                    'mos_plan': mos_plan,
+                    'assignments': assignments,
+                    'non_syllabus_text': non_syllabus_text,
+                    'ai_id': ai_id,
+                    'message_type': 'modular',
+                    'status': 'success'
+                })
+
+            # If no modules found, fall back to normal text.
+            return jsonify({
+                'response': response_text,
+                'mos_plan': mos_plan,
+                'assignments': assignments,
+                'non_syllabus_text': non_syllabus_text,
+                'ai_id': ai_id,
+                'message_type': 'normal',
+                'status': 'success',
+            })
+
+        # Default behavior for other agents.
         return jsonify({
             'response': response_text,
             'ai_id': ai_id,
-            'status': 'success'
+            'message_type': 'normal',
+            'status': 'success',
         })
     
     except Exception as e:
@@ -61,6 +96,9 @@ def chat():
             'error': str(e),
             'status': 'error'
         }), 500
+
+# init-dean-chat route removed; functionality merged into /chat
+
 
 
 @ai_bp.route('/reset-chat/<ai_id>', methods=['POST'])

@@ -13,7 +13,6 @@ import Team from "./scenes/team";
 // import FAQ from "./scenes/faq";
 // import Geography from "./scenes/geography";
 import Leetcode from "./scenes/leetcode/DefaultView";
-import Contacts from "./scenes/contacts"
 
 function App() {
   const [theme, colorMode] = useMode();
@@ -30,7 +29,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/team" element={<Team />} />
-              <Route path="/contacts" element={<Contacts />}/>
+              {/* <Route path="/contacts" element={<Contacts />}/> */}
               <Route path="/leetcode" element={<Leetcode />} />
               <Route path="/leetcode/:id" element={<Leetcode />} />
               {/* <Route path="/invoices" element={<Invoices />} /> */}

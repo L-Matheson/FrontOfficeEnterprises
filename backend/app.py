@@ -13,7 +13,7 @@ app.register_blueprint(ai_bp)
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint."""
-    from ai_routes import chat_sessions
+    from routes.ai import chat_sessions
     return jsonify({
         'status': 'healthy',
         'active_sessions': len(chat_sessions),

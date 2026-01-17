@@ -7,8 +7,10 @@ import SendIcon from '@mui/icons-material/Send';
 import PersonIcon from '@mui/icons-material/Person';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ForwardIcon from '@mui/icons-material/Forward';
-import { tokens } from "../theme";
+import { tokens } from "../../theme";
 import { useTheme } from "@mui/material";
+import Timeline from "./Timeline";
+import Assignments from "./Assignments";
 
 const ChatBox = ({
   ai,
@@ -19,6 +21,7 @@ const ChatBox = ({
   onKeyPress,
   onResetChat,
   onForwardMessage,
+  onForwardAssignment,
   isLoading = false,
   tokenCount = 0,
   isFocused = true
@@ -224,7 +227,7 @@ const ChatBox = ({
         ) : (
           messages.map((msg, idx) => (
             <Box
-              key={idx}
+              key={msg.id || `${ai?.id || 'ai'}-${msg.timestamp || 'no-ts'}-${msg.role || 'role'}-${idx}`}
               sx={{
                 display: 'flex',
                 alignItems: 'flex-start',
@@ -243,57 +246,78 @@ const ChatBox = ({
                   {ai.icon}
                 </Box>
               )}
-              <Paper
-                sx={{
-                  padding: 1.5,
-                  maxWidth: '80%',
-                  backgroundColor: msg.role === 'user' 
-                    ? colors.primary[300] 
-                    : msg.isError 
-                    ? colors.redAccent[700] 
-                    : colors.primary[500],
-                  borderLeft: msg.role === 'assistant' ? `3px solid ${ai.color}` : 
-                              msg.isForwarded ? `3px solid ${msg.forwardedColor}` : 'none',
-                  position: 'relative'
-                }}
-              >
-                {msg.isForwarded && (
-                  <Chip 
-                    label={`Forwarded from ${msg.forwardedFrom}`}
-                    size="small"
-                    sx={{ 
-                      mb: 1, 
-                      backgroundColor: msg.forwardedColor,
-                      color: 'white',
-                      fontWeight: 'bold'
-                    }}
-                  />
-                )}
-                <Box sx={{ 
-                  '& > *:last-child': { mb: 0 },
-                  wordBreak: 'break-word'
-                }}>
-                  <ReactMarkdown components={markdownComponents}>
-                    {msg.content}
-                  </ReactMarkdown>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
-                  <Typography variant="body2" sx={{ opacity: 0.6, fontSize: '0.9rem' }}>
+              {/* Render Timeline for modular messages, otherwise render normal Paper */}
+              {msg.messageType === 'modular' && msg.role === 'assistant' ? (
+                <Box sx={{ width: '100%', maxWidth: '90%' }}>
+                  <Timeline modules={msg.content} aiColor={ai.color} />
+                  <Typography variant="body2" sx={{ opacity: 0.6, fontSize: '0.9rem', mt: 1 }}>
                     {new Date(msg.timestamp).toLocaleTimeString()}
                   </Typography>
-                  {msg.role === 'assistant' && !msg.isError && onForwardMessage && (
-                    <Tooltip title="Forward to another AI">
-                      <IconButton 
-                        size="small" 
-                        onClick={(e) => onForwardMessage(e, msg.content, ai.id)}
-                        sx={{ ml: 1, opacity: 0.6, '&:hover': { opacity: 1 } }}
-                      >
-                        <ForwardIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  )}
                 </Box>
-              </Paper>
+              ) : msg.messageType === 'assignments' && msg.role === 'assistant' ? (
+                <Box sx={{ width: '100%', maxWidth: '90%' }}>
+                  <Assignments
+                    assignments={msg.content}
+                    aiColor={ai.color}
+                    onForwardAssignment={onForwardAssignment}
+                  />
+                  <Typography variant="body2" sx={{ opacity: 0.6, fontSize: '0.9rem', mt: 1 }}>
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </Typography>
+                </Box>
+              ) : (
+                <Paper
+                  sx={{
+                    padding: 1.5,
+                    maxWidth: '80%',
+                    backgroundColor: msg.role === 'user' 
+                      ? colors.primary[300] 
+                      : msg.isError 
+                      ? colors.redAccent[700] 
+                      : colors.primary[500],
+                    borderLeft: msg.role === 'assistant' ? `3px solid ${ai.color}` : 
+                                msg.isForwarded ? `3px solid ${msg.forwardedColor}` : 'none',
+                    position: 'relative'
+                  }}
+                >
+                  {msg.isForwarded && (
+                    <Chip 
+                      label={`Forwarded from ${msg.forwardedFrom}`}
+                      size="small"
+                      sx={{ 
+                        mb: 1, 
+                        backgroundColor: msg.forwardedColor,
+                        color: 'white',
+                        fontWeight: 'bold'
+                      }}
+                    />
+                  )}
+                  <Box sx={{ 
+                    '& > *:last-child': { mb: 0 },
+                    wordBreak: 'break-word'
+                  }}>
+                    <ReactMarkdown components={markdownComponents}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </Box>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 0.5 }}>
+                    <Typography variant="body2" sx={{ opacity: 0.6, fontSize: '0.9rem' }}>
+                      {new Date(msg.timestamp).toLocaleTimeString()}
+                    </Typography>
+                    {msg.role === 'assistant' && !msg.isError && onForwardMessage && (
+                      <Tooltip title="Forward to Assistant Dean">
+                        <IconButton 
+                          size="small" 
+                          onClick={(e) => onForwardMessage(e, msg.content, ai.id)}
+                          sx={{ ml: 1, opacity: 0.6, '&:hover': { opacity: 1 } }}
+                        >
+                          <ForwardIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
+                </Paper>
+              )}
             </Box>
           ))
         )}

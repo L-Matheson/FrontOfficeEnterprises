@@ -1,5 +1,5 @@
 import { Box, Typography, Paper, Tooltip } from "@mui/material";
-import { tokens } from "../theme";
+import { tokens } from "../../theme";
 import { useTheme } from "@mui/material";
 
 const AICard = ({ ai, onClick, index = 0 }) => {
