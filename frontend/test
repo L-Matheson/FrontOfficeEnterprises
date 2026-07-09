@@ -1,0 +1,127 @@
+import csv
+import io
+import os
+import requests
+from datetime import datetime, timedelta
+
+ROW_CAP_SAFETY_MARGIN = 950  # stay a bit under Jira's ~1000 row cap
+MIN_WINDOW = timedelta(hours=1)  # don't bisect smaller than this
+
+
+def get_issue_count(jql):
+    """Cheap count-only query (maxResults=0) to check how many issues a
+    JQL would return, without pulling any actual data."""
+    resp = requests.get(
+        f"{base_url}/rest/api/2/search",
+        params={"jql": jql, "maxResults": 0},
+        auth=auth,
+    )
+    resp.raise_for_status()
+    return resp.json()["total"]
+
+
+def get_date_windows(projectid, start, end):
+    """Recursively bisect [start, end) for this project until every
+    window's issue count is safely under the CSV export's row cap."""
+    jql = (
+        f'project = {projectid} AND '
+        f'created >= "{start.strftime("%Y-%m-%d %H:%M")}" AND '
+        f'created < "{end.strftime("%Y-%m-%d %H:%M")}"'
+    )
+    count = get_issue_count(jql)
+
+    if count == 0:
+        return []
+
+    if count <= ROW_CAP_SAFETY_MARGIN or (end - start) <= MIN_WINDOW:
+        if count > ROW_CAP_SAFETY_MARGIN:
+            print(
+                f"WARNING: {projectid} window {start}..{end} has {count} issues "
+                f"and can't be split further (hit MIN_WINDOW) -- may be truncated"
+            )
+        return [(start, end, count)]
+
+    mid = start + (end - start) / 2
+    return get_date_windows(projectid, start, mid) + get_date_windows(projectid, mid, end)
+
+
+def fetch_csv_rows(projectid, start, end):
+    """Fetch one window's worth of issues via the CSV export endpoint,
+    quote-aware parsed so multi-line fields don't corrupt rows."""
+    url = f"{base_url}/sr/jira.issueviews:searchrequest-csv-all-fields/temp/SearchRequest.csv"
+    jql = (
+        f'project = {projectid} AND '
+        f'created >= "{start.strftime("%Y-%m-%d %H:%M")}" AND '
+        f'created < "{end.strftime("%Y-%m-%d %H:%M")}"'
+    )
+    response = requests.get(
+        url, params={"jql": jql}, auth=auth, headers={"Accept": "text/csv"}
+    )
+    response.raise_for_status()
+
+    text = response.content.decode("utf-8-sig")
+    reader = csv.reader(io.StringIO(text))
+    rows = list(reader)
+
+    if not rows:
+        return None, []
+    header, data_rows = rows[0], rows[1:]
+    return header, data_rows
+
+
+def create_csvs():
+    os.makedirs("./jira_data", exist_ok=True)
+
+    overall_start = datetime(2020, 1, 1)
+    overall_end = datetime(2027, 1, 1)
+
+    for projectid in projects:
+        windows = get_date_windows(projectid, overall_start, overall_end)
+        print(f"{projectid}: split into {len(windows)} window(s)")
+
+        fieldnames_seen = {}
+        buffered_rows = []
+
+        for start, end, expected_count in windows:
+            header, data_rows = fetch_csv_rows(projectid, start, end)
+
+            if header is None or not data_rows:
+                print(f"{projectid}: no rows for {start}..{end}")
+                continue
+
+            if len(data_rows) < expected_count:
+                print(
+                    f"WARNING: {projectid} window {start}..{end} expected "
+                    f"{expected_count} issues but CSV returned {len(data_rows)} -- "
+                    f"still hit the cap, consider lowering ROW_CAP_SAFETY_MARGIN"
+                )
+
+            new_cols = [c for c in header if c not in fieldnames_seen]
+            if new_cols:
+                print(f"{projectid}: new column(s) in {start}..{end}: {new_cols}")
+                for c in new_cols:
+                    fieldnames_seen[c] = True
+
+            for row in data_rows:
+                if len(row) != len(header):
+                    print(
+                        f"WARNING: {projectid} row in {start}..{end} has "
+                        f"{len(row)} fields but header has {len(header)}; "
+                        f"skipping this row only"
+                    )
+                    continue
+                buffered_rows.append(dict(zip(header, row)))
+
+            print(f"{projectid}: buffered {len(data_rows)} rows for {start}..{end}")
+
+        if not buffered_rows:
+            print(f"{projectid}: no data collected, skipping file write")
+            continue
+
+        fieldnames = list(fieldnames_seen.keys())
+        with open(f"./jira_data/{projectid}.csv", "w", newline="", encoding="utf-8") as outfile:
+            writer = csv.DictWriter(outfile, fieldnames=fieldnames, restval="")
+            writer.writeheader()
+            writer.writerows(buffered_rows)
+
+        print(f"{projectid}: wrote {len(buffered_rows)} total rows, {len(fieldnames)} columns")
